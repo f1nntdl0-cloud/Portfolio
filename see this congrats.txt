@@ -1,0 +1,81 @@
+{
+  "name": "Daily Job Listing Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://remoteok.com/api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "id": "http-fetch",
+      "name": "Fetch Jobs API"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "id": "split-jobs",
+      "name": "Split into Items"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsProcessedInPreviousExecutions",
+        "keepItemsWhere": "valueIsNew",
+        "valueToDedupeOn": "={{ $json.id \vert{}\vert{}$json.url }}"
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 1.1,
+      "position": [660, 0],
+      "id": "remove-duplicates",
+      "name": "Skip Already Sent Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = \$input.all();\nif (items.length === 0) return [];\n\nlet listHtml = items.map(item => {\n  const j = item.json;\n  const title = j.position || j.title || 'Job Opening';\n  const company = j.company || 'Unknown Company';\n  const url = j.url || '#';\n  const tags = j.tags ? (Array.isArray(j.tags) ? j.tags.join(', ') : j.tags) : '';\n  \n  return `\n    <tr style=\"border-bottom: 1px solid #e0e0e0;\">\n      <td style=\"padding: 12px 8px;\">\n        <a href=\"${url}\" target=\"_blank\" style=\"font-size: 16px; font-weight: bold; color: #0066cc; text-decoration: none;\">${title}</a>\n        <div style=\"color: #555; font-size: 14px; margin-top: 4px;\">🏢 <strong>${company}</strong></div>\n        ${tags ? `<div style=\"color: #888; font-size: 12px; margin-top: 4px;\">🏷️ \${tags}</div>` : ''}\n      </td>
+    </tr>\n  `;\n}).join('');\n\nconst formattedEmail = `\n  <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;\">\n    <h2 style=\"color: #2c3e50;\">🔔 New Job Openings Alert</h2>\n    <p style=\"color: #666;\">Here are the latest matching job openings found since the last run:</p>\n    <table style=\"width: 100%; border-collapse: collapse; margin-top: 15px;\">\n      ${listHtml}\n    </table>\n  </div>\n`;\n\nreturn [{ json: { count: items.length, html: formattedEmail } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "format-list",
+      "name": "Format HTML Table List"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Fetch Jobs API", "type": "main", "index": 0 }]]
+    },
+    "Fetch Jobs API": {
+      "main": [[{ "node": "Split into Items", "type": "main", "index": 0 }]]
+    },
+    "Split into Items": {
+      "main": [[{ "node": "Skip Already Sent Jobs", "type": "main", "index": 0 }]]
+    },
+    "Skip Already Sent Jobs": {
+      "main": [[{ "node": "Format HTML Table List", "type": "main", "index": 0 }]]
+    }
+  }
+}
